@@ -1,11 +1,71 @@
 {
   "version": 1,
   "skills": {
+    "android-clean-architecture": {
+      "source": "affaan-m/ecc",
+      "sourceType": "github",
+      "skillPath": "skills/android-clean-architecture/SKILL.md",
+      "computedHash": "80779b595f194a1ca3d59e36cbf4b29f426faaf90cf9c41dfd61a80442214890"
+    },
     "app-store-screenshots": {
       "source": "101-skills/superpowers",
       "sourceType": "github",
       "skillPath": "guides/design/app-store-screenshots/SKILL.md",
       "computedHash": "2b83c1849f46fa729fc8b668613dcdd4e135937fa2266ad9932be020fe6fa77a"
+    },
+    "argent-android-emulator-setup": {
+      "source": "software-mansion/argent",
+      "sourceType": "github",
+      "skillPath": "packages/skills/skills/argent-android-emulator-setup/SKILL.md",
+      "computedHash": "e473dcdc433dd761040172fda70647620313d6ac55397f15e851dddc3ccaa790"
+    },
+    "argent-ios-simulator-setup": {
+      "source": "software-mansion/argent",
+      "sourceType": "github",
+      "skillPath": "packages/skills/skills/argent-ios-simulator-setup/SKILL.md",
+      "computedHash": "57613fc5050e4b15d87ed9eefd8f30f2d6f8951487ae14fbd09db341a30141a6"
+    },
+    "argent-react-native-optimization": {
+      "source": "software-mansion/argent",
+      "sourceType": "github",
+      "skillPath": "packages/skills/skills/argent-react-native-optimization/SKILL.md",
+      "computedHash": "00a47d8a7ef4911181e2ff38fa2718c425021c0d57397e4a91704697b62d6221"
+    },
+    "cloudflare": {
+      "source": "cloudflare/skills",
+      "sourceType": "github",
+      "skillPath": "skills/cloudflare/SKILL.md",
+      "computedHash": "08b64cf7112fd9a30d995b1c3f636e2690a37db0eea9d0ff8e50f2f7e8165fe3"
+    },
+    "extract-design-system": {
+      "source": "arvindrk/extract-design-system",
+      "sourceType": "github",
+      "skillPath": "skills/extract-design-system/SKILL.md",
+      "computedHash": "c66852c6bc6e0267dbcc9651fa698701387fc11c5058104bc33e67f495936f7e"
+    },
+    "firebase-security-rules-auditor": {
+      "source": "firebase/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/firebase-security-rules-auditor/SKILL.md",
+      "computedHash": "c910ebaa427236f3b6d5e72112c85c44676dc9046787988dbd07c5573cca7f1b"
+    },
+    "frontend-ui-engineering": {
+      "source": "addyosmani/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/frontend-ui-engineering/SKILL.md",
+      "computedHash": "49bb6ccfc41753bdd679f368ce75629ae9d424c5b8abc33faf949a4a55f919a1"
+    },
+    "react-native-best-practices": {
+      "source": "callstackincubator/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/react-native-best-practices/SKILL.md",
+      "computedHash": "5b9722518860a462a9308759b7046725e4a1ab59642ad6a6e520afc45bc8373b"
+    },
+    "wrangler": {
+      "source": "cloudflare/skills",
+      "sourceType": "github",
+      "skillPath": "skills/wrangler/SKILL.md",
+      "computedHash": "fe86e9d59d65dd1b314587a57ac1800783a2ece0e30fbfdde9523a66c266f414"
     }
   }
 }
