@@ -61,6 +61,11 @@
       "skillPath": "skills/react-native-best-practices/SKILL.md",
       "computedHash": "5b9722518860a462a9308759b7046725e4a1ab59642ad6a6e520afc45bc8373b"
     },
+    "security-audit": {
+      "source": "./skills/cloudflare/security-audit-skill",
+      "sourceType": "local",
+      "computedHash": "e6b2e317de75da97e9de18d842982994803f3a67a4a6d8154a82323dc3de8528"
+    },
     "wrangler": {
       "source": "cloudflare/skills",
       "sourceType": "github",
