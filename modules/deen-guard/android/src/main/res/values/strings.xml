@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="deen_guard_app_blocker_label">Deen Guard App Blocker</string>
+  <string name="deen_guard_app_blocker_description">Deen Guard uses this service only to detect when an app you chose to block is opened, and returns you to the home screen. It does not read, store or send any screen content.</string>
+</resources>

@@ -1,47 +1,37 @@
 import * as Location from 'expo-location';
 
-export const detectUserLocationAndLanguage = async () => {
+/** Asks for permission, reads GPS once, reverse-geocodes. Never throws. */
+export const detectLocation = async () => {
   try {
     const { status } = await Location.requestForegroundPermissionsAsync();
-    if (status !== 'granted') {
-      return {
-        success: false,
-        error: 'Permission denied',
-        suggestedLang: 'bn', // Default fallback
-      };
-    }
+    if (status !== 'granted') return { success: false, error: 'permission' };
 
-    const loc = await Location.getCurrentPositionAsync({
-      accuracy: Location.Accuracy.Balanced,
-    });
+    const pos =
+      (await Location.getLastKnownPositionAsync({ maxAge: 6 * 3600_000 })) ||
+      (await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }));
+    const { latitude, longitude } = pos.coords;
 
-    const [geo] = await Location.reverseGeocodeAsync({
-      latitude: loc.coords.latitude,
-      longitude: loc.coords.longitude,
-    });
+    let geo = null;
+    try {
+      [geo] = await Location.reverseGeocodeAsync({ latitude, longitude });
+    } catch {}
 
-    const isBangladesh = geo?.isoCountryCode === 'BD' || geo?.country === 'Bangladesh';
-    const suggestedLang = isBangladesh ? 'bn' : 'en';
-
+    const countryCode = geo?.isoCountryCode || '';
     return {
       success: true,
-      coords: {
-        latitude: loc.coords.latitude,
-        longitude: loc.coords.longitude,
+      location: {
+        latitude,
+        longitude,
+        city:
+          geo?.city || geo?.district || geo?.subregion || geo?.region ||
+          `${latitude.toFixed(2)}, ${longitude.toFixed(2)}`,
+        country: geo?.country || '',
+        countryCode,
+        detected: true,
       },
-      address: {
-        city: geo?.city || geo?.subregion || 'Dhaka',
-        country: geo?.country || 'Bangladesh',
-        countryCode: geo?.isoCountryCode || 'BD',
-      },
-      suggestedLang,
+      suggestedLang: countryCode === 'BD' ? 'bn' : 'en',
     };
-  } catch (error) {
-    console.log('Location detection error:', error);
-    return {
-      success: false,
-      error: error.message,
-      suggestedLang: 'bn',
-    };
+  } catch (e) {
+    return { success: false, error: e?.message || 'unknown' };
   }
 };

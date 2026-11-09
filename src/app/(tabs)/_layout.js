@@ -1,59 +1,36 @@
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { theme } from '../../constants/theme';
-import { useAppStore } from '../../store/useAppStore';
-import { translations } from '../../constants/translations';
+import { useT } from '../../hooks/useT';
+
+const ICONS = {
+  index: 'time-outline',
+  quran: 'book-outline',
+  hadith: 'library-outline',
+  guard: 'shield-checkmark-outline',
+  more: 'grid-outline',
+};
 
 export default function TabLayout() {
-  const language = useAppStore((state) => state.language);
-  const t = translations[language];
-
+  const { t } = useT();
+  const titles = { index: t.home, quran: t.quran, hadith: t.hadith, guard: t.guard, more: t.more };
   return (
     <Tabs
-      screenOptions={{
+      screenOptions={({ route }) => ({
         headerShown: false,
-        tabBarStyle: {
-          backgroundColor: theme.colors.cardBg,
-          borderTopColor: theme.colors.border,
-          height: 60,
-          paddingBottom: 8,
-          paddingTop: 8,
-        },
+        title: titles[route.name],
         tabBarActiveTintColor: theme.colors.primary,
         tabBarInactiveTintColor: theme.colors.textSecondary,
-        tabBarLabelStyle: {
-          fontSize: 12,
-          fontWeight: '600',
-        },
-      }}
+        tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
+        tabBarStyle: { backgroundColor: theme.colors.cardBg, borderTopColor: theme.colors.border },
+        tabBarIcon: ({ color, size }) => <Ionicons name={ICONS[route.name]} size={size} color={color} />,
+      })}
     >
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: t.prayerTimes,
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="time-outline" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="silent-settings"
-        options={{
-          title: t.autoSilent,
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="volume-mute-outline" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="settings"
-        options={{
-          title: t.settings,
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="settings-outline" size={size} color={color} />
-          ),
-        }}
-      />
+      <Tabs.Screen name="index" />
+      <Tabs.Screen name="quran" />
+      <Tabs.Screen name="hadith" />
+      <Tabs.Screen name="guard" />
+      <Tabs.Screen name="more" />
     </Tabs>
   );
 }

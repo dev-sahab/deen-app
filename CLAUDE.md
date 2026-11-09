@@ -12,40 +12,47 @@ Deen App is an Islamic prayer time auto-silent mode mobile app built with React 
 # Install dependencies (required: --legacy-peer-deps for Expo SDK 58 + React 19)
 npm install --legacy-peer-deps
 
-# Start development server
-npm start
+# Native modules do NOT run in Expo Go — build a dev client once via EAS
+npm run build:dev        # EAS dev-client APK
+npm start                # Metro for the dev client
+npm run build:apk        # shareable test APK (build:prod → Play AAB)
 
-# Run on Android (emulator or physical device)
-npm run android
-
-# Run on iOS (macOS only)
-npm run ios
-
-# Run on web browser
-npm run web
+# Quick check that the whole JS bundle compiles
+npx expo export --platform android
 ```
+
+No local JDK/Android SDK is assumed; Kotlin is compiled on EAS. See docs/STACK.md.
 
 ## Architecture
 
 ### File-Based Routing with Expo Router
 
-Routes are defined in `src/app/` following Next.js-style file-based routing:
-- `src/app/index.js` - First-launch language setup screen
-- `src/app/(tabs)/` - Tab-navigated screens (Prayer Times, Silent Settings, Settings)
-- `src/app/_layout.js` - Root layout with providers
+Routes in `src/app/`:
+- `index.js` - onboarding (location → language); redirects to tabs when done
+- `(tabs)/` - Home (times, countdown, Hijri, daily hadith), Quran, Hadith, Guard, More
+- `quran/[surah].js`, `hadith/[book]/index.js`, `hadith/[book]/[section].js`
+- `silent.js`, `qibla.js`, `tasbih.js`, `settings.js`, `blocked-apps.js`
+- `_layout.js` - waits for store hydration, calls `syncAll()` on launch / foreground / settings change
+
+### Native module: `modules/deen-guard`
+
+Local Expo module (Kotlin; iOS is a capability stub): auto-silent alarm chain (`SilentScheduler.kt`),
+local DNS-VPN content filter (`DnsVpnService.kt`), accessibility app blocker (`AppBlockerService.kt`).
+The JS wrapper `modules/deen-guard/index.js` is safe to call anywhere (no-ops without native code).
+Behaviour rules and Play-policy notes: docs/STACK.md.
 
 ### State Management (Zustand)
 
-All app state lives in `src/store/useAppStore.js` using Zustand with AsyncStorage persistence for:
-- `language` - 'bn' | 'en'
-- `hasCompletedOnboarding` - First launch flag
-- `location` - { latitude, longitude, city, country, countryCode }
-- `silentSettings` - Per-prayer config: { enabled, offsetBefore, duration, customJamaatTime }
+`src/store/useAppStore.js` uses zustand `persist` (AsyncStorage): language, onboarding, location,
+calc (method / madhab / hijriOffset), silent (mode, per-prayer before/after/jamaatTime, jumuah),
+athan, guard (filter preset, custom domains, blocked apps), quran, tasbih.
 
 ### Services Layer
 
-- `src/services/prayerService.js` - Prayer time calculations using `adhan` library (Karachi method)
-- `src/services/locationService.js` - GPS detection + reverse geocoding for country/language auto-detection
+- `prayerService.js` - adhan times (Karachi + Hanafi default), current/next prayer, `buildSilentWindows`
+- `syncService.js` - pushes state to native (silent windows, filter config); schedules athan notifications
+- `contentService.js` - Quran/Hadith from fawazahmed0 APIs with on-disk cache
+- `hijri.js`, `locationService.js`; UI text via `useT()` (src/hooks/useT.js)
 
 ### Constants
 

@@ -1,229 +1,103 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Image } from 'react-native';
-import { useRouter } from 'expo-router';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { Redirect, useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { useAppStore } from '../store/useAppStore';
 import { translations } from '../constants/translations';
 import { theme } from '../constants/theme';
-import { detectUserLocationAndLanguage } from '../services/locationService';
-import { Ionicons } from '@expo/vector-icons';
+import { detectLocation } from '../services/locationService';
+import { requestNotificationPermission } from '../services/syncService';
 
-export default function LanguageSetupScreen() {
+/** First launch: detect location → suggest language → continue. */
+export default function Onboarding() {
   const router = useRouter();
-  const { language, setLanguage, hasCompletedOnboarding, completeOnboarding, setLocation } = useAppStore();
-  const [loading, setLoading] = useState(true);
+  const done = useAppStore((s) => s.hasCompletedOnboarding);
+  const language = useAppStore((s) => s.language);
+  const { setLanguage, setLocation, completeOnboarding } = useAppStore.getState();
+  const [loading, setLoading] = useState(!done);
   const t = translations[language];
 
   useEffect(() => {
-    // Check if onboarding is already completed
-    if (hasCompletedOnboarding) {
-      router.replace('/(tabs)');
-      return;
-    }
-
-    // Auto-detect location & suggest language
-    const initApp = async () => {
-      setLoading(true);
-      const res = await detectUserLocationAndLanguage();
+    if (done) return;
+    (async () => {
+      const res = await detectLocation();
       if (res.success) {
+        setLocation(res.location);
         setLanguage(res.suggestedLang);
-        setLocation({
-          latitude: res.coords.latitude,
-          longitude: res.coords.longitude,
-          city: res.address.city,
-          country: res.address.country,
-          countryCode: res.address.countryCode,
-        });
       }
       setLoading(false);
-    };
+    })();
+  }, []);
 
-    initApp();
-  }, [hasCompletedOnboarding]);
+  if (done) return <Redirect href="/(tabs)" />;
 
-  const handleContinue = async () => {
-    await completeOnboarding();
+  const finish = async () => {
+    await requestNotificationPermission().catch(() => {});
+    completeOnboarding();
     router.replace('/(tabs)');
   };
 
-  if (loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <View style={styles.logoBadge}>
-          <Ionicons name="moon" size={48} color={theme.colors.gold} />
-        </View>
-        <Text style={styles.loadingTitle}>দ্বীন অ্যাপ / Deen App</Text>
-        <ActivityIndicator size="large" color={theme.colors.gold} style={{ marginTop: 20 }} />
-        <Text style={styles.loadingText}>অবস্থান ও ভাষা নির্ধারণ করা হচ্ছে...</Text>
-      </View>
-    );
-  }
-
   return (
     <View style={styles.container}>
-      <View style={styles.headerSection}>
-        <View style={styles.logoBadgeLarge}>
-          <Ionicons name="moon" size={64} color={theme.colors.gold} />
-        </View>
-        <Text style={styles.appTitle}>দ্বীন অ্যাপ</Text>
-        <Text style={styles.appSubtitle}>Deen App - Islamic Companion</Text>
+      <View style={styles.badge}>
+        <Ionicons name="moon" size={56} color={theme.colors.gold} />
       </View>
+      <Text style={styles.title}>দ্বীন অ্যাপ</Text>
+      <Text style={styles.subtitle}>Deen App · {t.tagline}</Text>
 
       <View style={styles.card}>
-        <Text style={styles.sectionTitle}>ভাষা নির্বাচন করুন / Select Language</Text>
-        <Text style={styles.sectionDesc}>
-          আপনার সুবিধার্থে ভাষা নির্বাচন করুন। (Default is set based on your region).
-        </Text>
-
-        <TouchableOpacity
-          style={[styles.langOption, language === 'bn' && styles.selectedLang]}
-          onPress={() => setLanguage('bn')}
-        >
-          <View style={styles.langRow}>
-            <Text style={[styles.langText, language === 'bn' && styles.selectedLangText]}>বাংলা (Bangladesh)</Text>
-            {language === 'bn' && <Ionicons name="checkmark-circle" size={24} color={theme.colors.primary} />}
+        {loading ? (
+          <View style={{ alignItems: 'center', paddingVertical: 24 }}>
+            <ActivityIndicator size="large" color={theme.colors.primary} />
+            <Text style={styles.desc}>অবস্থান নির্ধারণ করা হচ্ছে... / Detecting location...</Text>
           </View>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.langOption, language === 'en' && styles.selectedLang]}
-          onPress={() => setLanguage('en')}
-        >
-          <View style={styles.langRow}>
-            <Text style={[styles.langText, language === 'en' && styles.selectedLangText]}>English (International)</Text>
-            {language === 'en' && <Ionicons name="checkmark-circle" size={24} color={theme.colors.primary} />}
-          </View>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.continueButton} onPress={handleContinue}>
-          <Text style={styles.continueButtonText}>{t.continue}</Text>
-          <Ionicons name="arrow-forward" size={20} color="#fff" style={{ marginLeft: 8 }} />
-        </TouchableOpacity>
+        ) : (
+          <>
+            <Text style={styles.cardTitle}>ভাষা নির্বাচন করুন / Select Language</Text>
+            {[
+              ['bn', 'বাংলা'],
+              ['en', 'English'],
+            ].map(([code, label]) => (
+              <TouchableOpacity
+                key={code}
+                style={[styles.option, language === code && styles.optionActive]}
+                onPress={() => setLanguage(code)}
+              >
+                <Text style={[styles.optionText, language === code && { color: theme.colors.primary }]}>{label}</Text>
+                {language === code && <Ionicons name="checkmark-circle" size={22} color={theme.colors.primary} />}
+              </TouchableOpacity>
+            ))}
+            <TouchableOpacity style={styles.button} onPress={finish}>
+              <Text style={styles.buttonText}>{t.continue}</Text>
+              <Ionicons name="arrow-forward" size={18} color="#fff" style={{ marginLeft: 8 }} />
+            </TouchableOpacity>
+          </>
+        )}
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: theme.colors.primary,
-    padding: 24,
-    justifyContent: 'center',
+  container: { flex: 1, backgroundColor: theme.colors.primary, padding: 24, justifyContent: 'center' },
+  badge: {
+    width: 104, height: 104, borderRadius: 52, alignSelf: 'center', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: theme.colors.primaryDark, borderWidth: 3, borderColor: theme.colors.gold, marginBottom: 14,
   },
-  loadingContainer: {
-    flex: 1,
-    backgroundColor: theme.colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
+  title: { fontSize: 32, fontWeight: 'bold', color: '#fff', textAlign: 'center' },
+  subtitle: { fontSize: 14, color: theme.colors.goldLight, textAlign: 'center', marginTop: 4, marginBottom: 28 },
+  card: { backgroundColor: '#fff', borderRadius: 20, padding: 22, ...theme.shadows.card },
+  cardTitle: { fontSize: 17, fontWeight: 'bold', color: theme.colors.textPrimary, textAlign: 'center', marginBottom: 16 },
+  desc: { fontSize: 13, color: theme.colors.textSecondary, marginTop: 12, textAlign: 'center' },
+  option: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    borderWidth: 1.5, borderColor: theme.colors.border, borderRadius: 12, padding: 16, marginBottom: 10,
   },
-  logoBadge: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
-    backgroundColor: theme.colors.primaryDark,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: theme.colors.gold,
-    marginBottom: 16,
+  optionActive: { borderColor: theme.colors.primary, backgroundColor: '#E8F5E9' },
+  optionText: { fontSize: 16, fontWeight: '600', color: theme.colors.textPrimary },
+  button: {
+    backgroundColor: theme.colors.primary, borderRadius: 12, padding: 16, marginTop: 10,
+    flexDirection: 'row', justifyContent: 'center', alignItems: 'center',
   },
-  logoBadgeLarge: {
-    width: 110,
-    height: 110,
-    borderRadius: 55,
-    backgroundColor: theme.colors.primaryDark,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 3,
-    borderColor: theme.colors.gold,
-    marginBottom: 16,
-    alignSelf: 'center',
-  },
-  loadingTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginTop: 12,
-  },
-  loadingText: {
-    fontSize: 14,
-    color: theme.colors.goldLight,
-    marginTop: 10,
-  },
-  headerSection: {
-    alignItems: 'center',
-    marginBottom: 30,
-  },
-  appTitle: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#fff',
-    textAlign: 'center',
-  },
-  appSubtitle: {
-    fontSize: 14,
-    color: theme.colors.goldLight,
-    textAlign: 'center',
-    marginTop: 4,
-  },
-  card: {
-    backgroundColor: theme.colors.cardBg,
-    borderRadius: 20,
-    padding: 24,
-    ...theme.shadows.card,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: theme.colors.textPrimary,
-    textAlign: 'center',
-  },
-  sectionDesc: {
-    fontSize: 13,
-    color: theme.colors.textSecondary,
-    textAlign: 'center',
-    marginTop: 6,
-    marginBottom: 20,
-  },
-  langOption: {
-    borderWidth: 1.5,
-    borderColor: theme.colors.border,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    backgroundColor: '#fff',
-  },
-  selectedLang: {
-    borderColor: theme.colors.primary,
-    backgroundColor: '#E8F5E9',
-  },
-  langRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  langText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: theme.colors.textPrimary,
-  },
-  selectedLangText: {
-    color: theme.colors.primary,
-    fontWeight: 'bold',
-  },
-  continueButton: {
-    backgroundColor: theme.colors.primary,
-    borderRadius: 12,
-    padding: 16,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 16,
-  },
-  continueButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
+  buttonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
 });

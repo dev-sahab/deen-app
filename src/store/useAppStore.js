@@ -1,84 +1,103 @@
+import { useEffect, useState } from 'react';
 import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-export const useAppStore = create((set, get) => ({
-  // Language & Onboarding
-  language: 'bn', // 'bn' | 'en'
-  hasCompletedOnboarding: false,
+const prayer = (before, after) => ({ enabled: true, before, after, jamaatTime: '' });
 
-  // Location
-  location: {
-    latitude: 23.8103, // Default Dhaka
-    longitude: 90.4125,
-    city: 'Dhaka',
-    country: 'Bangladesh',
-    countryCode: 'BD',
+export const DEFAULT_SILENT = {
+  enabled: false, // master switch; turned on after the user grants DND access
+  mode: 'silent', // 'silent' | 'vibrate'
+  prayers: {
+    fajr: prayer(5, 25),
+    dhuhr: prayer(5, 25),
+    asr: prayer(5, 20),
+    maghrib: prayer(2, 18),
+    isha: prayer(5, 25),
   },
-  isLoadingLocation: false,
+  jumuah: { enabled: true, before: 10, after: 60, jamaatTime: '' },
+};
 
-  // Prayer Silent Settings
-  // Format per prayer:
-  // { enabled: boolean, offsetBefore: number (mins), duration: number (mins), customJamaatTime: string | null }
-  silentSettings: {
-    fajr: { enabled: true, offsetBefore: 5, duration: 25, customJamaatTime: null },
-    dhuhr: { enabled: true, offsetBefore: 5, duration: 20, customJamaatTime: null },
-    asr: { enabled: true, offsetBefore: 5, duration: 20, customJamaatTime: null },
-    maghrib: { enabled: true, offsetBefore: 5, duration: 15, customJamaatTime: null },
-    isha: { enabled: true, offsetBefore: 5, duration: 25, customJamaatTime: null },
-  },
+export const FILTER_PRESETS = {
+  adguardFamily: { label: 'AdGuard Family (adult + ads + SafeSearch)', servers: ['94.140.14.15', '94.140.15.16'] },
+  cloudflareFamily: { label: 'Cloudflare Family (adult + malware)', servers: ['1.1.1.3', '1.0.0.3'] },
+  cleanBrowsing: { label: 'CleanBrowsing Family (adult + mixed content)', servers: ['185.228.168.168', '185.228.169.168'] },
+};
 
-  // Actions
-  setLanguage: async (lang) => {
-    set({ language: lang });
-    await AsyncStorage.setItem('app_language', lang);
-  },
+export const useAppStore = create(
+  persist(
+    (set, get) => ({
+      language: 'bn',
+      hasCompletedOnboarding: false,
 
-  completeOnboarding: async () => {
-    set({ hasCompletedOnboarding: true });
-    await AsyncStorage.setItem('onboarding_complete', 'true');
-  },
+      location: {
+        latitude: 23.8103, // Dhaka until GPS says otherwise
+        longitude: 90.4125,
+        city: 'Dhaka',
+        country: 'Bangladesh',
+        countryCode: 'BD',
+        detected: false,
+      },
 
-  setLocation: (locationData) => {
-    set({ location: { ...get().location, ...locationData } });
-  },
+      calc: { method: 'Karachi', madhab: 'hanafi', hijriOffset: 0 },
 
-  setLoadingLocation: (loading) => {
-    set({ isLoadingLocation: loading });
-  },
+      silent: DEFAULT_SILENT,
 
-  updateSilentSetting: async (prayer, settings) => {
-    const current = get().silentSettings;
-    const updated = {
-      ...current,
-      [prayer]: { ...current[prayer], ...settings },
-    };
-    set({ silentSettings: updated });
-    await AsyncStorage.setItem('silent_settings', JSON.stringify(updated));
-  },
+      athan: {
+        enabled: true,
+        prayers: { fajr: true, dhuhr: true, asr: true, maghrib: true, isha: true },
+        reminderMinutes: 0, // extra "prayer in N minutes" notification; 0 = off
+      },
 
-  toggleAllSilent: async (enabled) => {
-    const current = get().silentSettings;
-    const updated = {};
-    Object.keys(current).forEach((key) => {
-      updated[key] = { ...current[key], enabled };
-    });
-    set({ silentSettings: updated });
-    await AsyncStorage.setItem('silent_settings', JSON.stringify(updated));
-  },
+      guard: {
+        filterPreset: 'adguardFamily',
+        customDomains: [],
+        blockedApps: [],
+      },
 
-  loadStoredSettings: async () => {
-    try {
-      const storedLang = await AsyncStorage.getItem('app_language');
-      const storedOnboarding = await AsyncStorage.getItem('onboarding_complete');
-      const storedSilent = await AsyncStorage.getItem('silent_settings');
+      quran: { arabicEdition: 'ara-quranindopak', showTranslation: true, lastRead: null },
 
-      set({
-        language: storedLang || 'bn',
-        hasCompletedOnboarding: storedOnboarding === 'true',
-        silentSettings: storedSilent ? JSON.parse(storedSilent) : get().silentSettings,
-      });
-    } catch (e) {
-      console.log('Error loading saved store settings:', e);
+      tasbih: { count: 0, target: 33, total: 0 },
+
+      setLanguage: (language) => set({ language }),
+      completeOnboarding: () => set({ hasCompletedOnboarding: true }),
+      setLocation: (loc) => set({ location: { ...get().location, ...loc } }),
+      setCalc: (patch) => set({ calc: { ...get().calc, ...patch } }),
+
+      setSilent: (patch) => set({ silent: { ...get().silent, ...patch } }),
+      setSilentPrayer: (key, patch) => {
+        const s = get().silent;
+        if (key === 'jumuah') set({ silent: { ...s, jumuah: { ...s.jumuah, ...patch } } });
+        else set({ silent: { ...s, prayers: { ...s.prayers, [key]: { ...s.prayers[key], ...patch } } } });
+      },
+
+      setAthan: (patch) => set({ athan: { ...get().athan, ...patch } }),
+      setAthanPrayer: (key, on) => {
+        const a = get().athan;
+        set({ athan: { ...a, prayers: { ...a.prayers, [key]: on } } });
+      },
+
+      setGuard: (patch) => set({ guard: { ...get().guard, ...patch } }),
+      setQuran: (patch) => set({ quran: { ...get().quran, ...patch } }),
+      setTasbih: (patch) => set({ tasbih: { ...get().tasbih, ...patch } }),
+    }),
+    {
+      name: 'deen-app-store',
+      version: 2,
+      storage: createJSONStorage(() => AsyncStorage),
+      // v1 kept separate AsyncStorage keys; only language/onboarding are worth carrying over.
+      migrate: (persisted) => persisted || {},
     }
-  },
-}));
+  )
+);
+
+/** Resolves once AsyncStorage has been read, so screens don't flash defaults. */
+export const useHydrated = () => {
+  const [hydrated, setHydrated] = useState(useAppStore.persist.hasHydrated());
+  useEffect(() => {
+    const unsub = useAppStore.persist.onFinishHydration(() => setHydrated(true));
+    setHydrated(useAppStore.persist.hasHydrated());
+    return unsub;
+  }, []);
+  return hydrated;
+};

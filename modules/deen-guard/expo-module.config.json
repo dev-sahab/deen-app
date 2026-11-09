@@ -1,0 +1,9 @@
+{
+  "platforms": ["apple", "android"],
+  "apple": {
+    "modules": ["DeenGuardModule"]
+  },
+  "android": {
+    "modules": ["expo.modules.deenguard.DeenGuardModule"]
+  }
+}

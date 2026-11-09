@@ -1,214 +1,163 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl, Switch } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useAppStore } from '../../store/useAppStore';
-import { translations } from '../../constants/translations';
-import { theme } from '../../constants/theme';
-import { getPrayerTimesForLocation, formatPrayerTime } from '../../services/prayerService';
 import { Ionicons } from '@expo/vector-icons';
-import { PrayerCard } from '../../components/PrayerCard';
+import { Screen, Card, SectionTitle } from '../../components/ui';
+import { useAppStore } from '../../store/useAppStore';
+import { useT } from '../../hooks/useT';
+import { useNow } from '../../hooks/useNow';
+import { theme } from '../../constants/theme';
+import { getPrayerState, formatTime, formatCountdown, toLocalDigits, PRAYERS } from '../../services/prayerService';
+import { getHijriDate, HIJRI_MONTHS } from '../../services/hijri';
+import { getDailyHadith } from '../../services/contentService';
+import * as DeenGuard from '../../../modules/deen-guard';
 
-export default function PrayerTimesScreen() {
+const c = theme.colors;
+
+export default function Home() {
   const router = useRouter();
-  const language = useAppStore((state) => state.language);
-  const location = useAppStore((state) => state.location);
-  const silentSettings = useAppStore((state) => state.silentSettings);
-  const isLoadingLocation = useAppStore((state) => state.isLoadingLocation);
-  const setLocation = useAppStore((state) => state.setLocation);
-  const setLoadingLocation = useAppStore((state) => state.setLoadingLocation);
-  const t = translations[language];
+  const { t, lang } = useT();
+  const location = useAppStore((s) => s.location);
+  const calc = useAppStore((s) => s.calc);
+  const silent = useAppStore((s) => s.silent);
+  const now = useNow(1000);
+  const dayKey = now.toDateString();
+  const minuteKey = Math.floor(now.getTime() / 60_000);
 
-  const [prayerTimes, setPrayerTimes] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [refreshed, setRefreshed] = useState(false);
+  const state = useMemo(() => getPrayerState(location, calc, now), [location, calc, minuteKey]);
+  const hijri = useMemo(() => getHijriDate(now, calc.hijriOffset), [dayKey, calc.hijriOffset]);
 
-  const loadPrayerTimes = async (coords) => {
-    if (!coords) return;
-    setLoading(true);
-    const times = await getPrayerTimesForLocation(coords.latitude, coords.longitude);
-    setPrayerTimes(times);
-    setLoading(false);
-  };
-
+  const [silentStatus, setSilentStatus] = useState(null);
   useEffect(() => {
-    const init = async () => {
-      if (location.latitude && location.longitude) {
-        setLoadingLocation(true);
-        await loadPrayerTimes(location);
-        setLoadingLocation(false);
-      }
-    };
-    init();
-  }, [location]);
+    setSilentStatus(DeenGuard.getSilentStatus());
+  }, [minuteKey, silent]);
 
-  const onRefresh = async () => {
-    setRefreshed(true);
-    await loadPrayerTimes(location);
-    setTimeout(() => setRefreshed(false), 2000);
-  };
+  const [hadith, setHadith] = useState(null);
+  useEffect(() => {
+    getDailyHadith(lang).then(setHadith).catch(() => setHadith(null));
+  }, [lang, dayKey]);
 
-  const handleSilentToggle = (prayer, enabled) => {
-    // This would update silent settings; for now just navigate to settings
-  };
-
-  if (loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={theme.colors.gold} />
-        <Text style={styles.loadingText}>অবস্থান নির্ধারণ করা হচ্ছে... / Calculating Prayer Times...</Text>
-      </View>
-    );
-  }
-
-  const getSilentStatus = (prayerName) => {
-    const setting = silentSettings[prayerName];
-    if (!setting?.enabled) return 'inactive';
-    const prayerTime = prayerTimes?.[prayerName];
-    if (!prayerTime) return 'inactive';
-    return 'active';
-  };
+  const gregorian = now.toLocaleDateString(lang === 'bn' ? 'bn-BD' : 'en-GB', {
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+  });
+  const hijriText = `${toLocalDigits(hijri.day, lang)} ${HIJRI_MONTHS[lang][hijri.month - 1]} ${toLocalDigits(hijri.year, lang)}`;
+  const nextIn = state?.next?.time ? state.next.time.getTime() - now.getTime() : null;
 
   return (
-    <ScrollView
-      contentContainerStyle={styles.container}
-      refreshControl={<RefreshControl refreshing={refreshed} onRefresh={onRefresh} />}
-    >
-      {/* Header Card */}
-      <View style={styles.headerCard}>
-        <View style={styles.locationRow}>
-          <Ionicons name="location-outline" size={20} color={theme.colors.gold} />
-          <Text style={styles.locationText}>
-            {location.city}, {location.country}
+    <Screen>
+      <View style={styles.hero}>
+        <View style={styles.locRow}>
+          <Ionicons name="location-outline" size={16} color={c.goldLight} />
+          <Text style={styles.loc} numberOfLines={1}>
+            {location.city}{location.country ? `, ${location.country}` : ''}
           </Text>
         </View>
-        <Text style={styles.currentStatus}>
-          {prayerTimes ? prayerTimes.currentPrayer.name : '--'}
+        <Text style={styles.date}>{gregorian}</Text>
+        <Text style={styles.hijri}>{hijriText} {lang === 'bn' ? 'হিজরি' : 'AH'}</Text>
+
+        <View style={styles.divider} />
+        <Text style={styles.heroLabel}>
+          {t.currentWaqt}: {state?.current ? t[state.current] : t.noWaqt}
         </Text>
-        <Text style={styles.nextPrayerText}>
-          {prayerTimes ? prayerTimes.nextPrayer.name : '--'} - {formatPrayerTime(prayerTimes?.nextPrayer.time)}
+        <Text style={styles.nextName}>
+          {t.nextPrayer}: {state?.next ? t[state.next.key] : '--'} · {formatTime(state?.next?.time, lang)}
         </Text>
+        <Text style={styles.countdown}>{formatCountdown(nextIn, lang)}</Text>
+        <Text style={styles.heroLabel}>{t.remaining}</Text>
       </View>
 
-      {/* Auto Silent Status Card */}
-      <View style={styles.autoSilentCard}>
-        <View style={styles.autoSilentRow}>
-          <View>
-            <Text style={styles.autoSilentTitle}>{t.autoSilent}</Text>
-            <Text style={styles.autoSilentDesc}>{t.autoSilentDesc}</Text>
-          </View>
-          <Switch
-            value={Object.values(silentSettings).some(s => s.enabled)}
-            onValueChange={handleSilentToggle}
-            thumbColor={theme.colors.primary}
-          />
-        </View>
-      </View>
-
-      {/* Prayer Cards */}
-      <Text style={styles.sectionTitle}>{t.todayPrayers}</Text>
-      <View>
-        {Object.keys(silentSettings).map((prayerKey) => {
-          const prayerLabel = t[prayerKey];
-          const silentStatus = getSilentStatus(prayerKey);
-          return (
-            <PrayerCard
-              key={prayerKey}
-              prayerName={prayerKey}
-              displayName={prayerLabel}
-              time={prayerTimes ? formatPrayerTime(prayerTimes[prayerKey]) : '--:--'}
-              silentStatus={silentStatus}
-              silentEnabled={silentSettings[prayerKey].enabled}
-              silentRange={silentSettings[prayerKey].enabled ? `${formatSilentTime(prayerTimes?.[prayerKey] - silentSettings[prayerKey].offsetBefore * 60000)} - ${formatSilentTime(prayerTimes?.[prayerKey] + silentSettings[prayerKey].duration * 60000)}` : null}
-              onToggleSilent={(enabled) => handleSilentToggle(prayerKey, enabled)}
+      {silent.enabled && silentStatus ? (
+        <TouchableOpacity onPress={() => router.push('/silent')}>
+          <Card style={styles.silentCard}>
+            <Ionicons
+              name={silentStatus.active ? 'volume-mute' : 'notifications-off-outline'}
+              size={22}
+              color={c.silentActive}
             />
+            <Text style={styles.silentText}>
+              {silentStatus.active
+                ? `${t.silentNow}: ${silentStatus.active.label} — ${t.silentUntil} ${formatTime(new Date(silentStatus.active.end), lang)}`
+                : silentStatus.next
+                ? `${t.silentNext}: ${silentStatus.next.label} · ${formatTime(new Date(silentStatus.next.start), lang)}`
+                : t.autoSilent}
+            </Text>
+          </Card>
+        </TouchableOpacity>
+      ) : null}
+
+      <SectionTitle>{t.todayPrayers}</SectionTitle>
+      <Card style={{ paddingVertical: 6 }}>
+        {['fajr', 'sunrise', ...PRAYERS.slice(1)].map((key) => {
+          const isNext = state?.next?.key === key;
+          const isCurrent = state?.current === key;
+          const silentOn = silent.enabled && silent.prayers[key]?.enabled;
+          return (
+            <View key={key} style={[styles.prayerRow, isNext && styles.prayerNext]}>
+              <Text style={[styles.prayerName, isCurrent && { color: c.primary }]}>
+                {t[key]}
+                {isCurrent ? ' •' : ''}
+              </Text>
+              {silentOn ? <Ionicons name="volume-mute-outline" size={15} color={c.silentActive} style={{ marginRight: 8 }} /> : null}
+              <Text style={[styles.prayerTime, isNext && { color: c.primary }]}>
+                {formatTime(state?.today?.[key], lang)}
+              </Text>
+            </View>
           );
         })}
-      </View>
-    </ScrollView>
-  );
-};
+        {state?.today?.lastThird ? (
+          <View style={styles.prayerRow}>
+            <Text style={[styles.prayerName, styles.minor]}>{t.lastThird}</Text>
+            <Text style={[styles.prayerTime, styles.minor]}>{formatTime(state.today.lastThird, lang)}</Text>
+          </View>
+        ) : null}
+      </Card>
 
-function formatSilentTime(date) {
-  if (!date) return '';
-  const hours = date.getHours().toString().padStart(2, '0');
-  const minutes = date.getMinutes().toString().padStart(2, '0');
-  const ampm = hours >= 12 ? 'PM' : 'AM';
-  const displayHour = hours % 12 || 12;
-  return `${displayHour}:${minutes} ${ampm}`;
+      <View style={styles.quickRow}>
+        {[
+          ['compass-outline', t.qibla, '/qibla'],
+          ['ellipse-outline', t.tasbih, '/tasbih'],
+          ['volume-mute-outline', t.autoSilent, '/silent'],
+        ].map(([icon, label, href]) => (
+          <TouchableOpacity key={href} style={styles.quick} onPress={() => router.push(href)}>
+            <Ionicons name={icon} size={24} color={c.primary} />
+            <Text style={styles.quickText} numberOfLines={1}>{label}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {hadith ? (
+        <>
+          <SectionTitle>{t.hadithOfDay}</SectionTitle>
+          <Card>
+            <Text style={styles.hadith} numberOfLines={10}>{hadith.text}</Text>
+            <Text style={styles.hadithRef}>— An-Nawawi 40, #{toLocalDigits(hadith.hadithnumber, lang)}</Text>
+          </Card>
+        </>
+      ) : null}
+    </Screen>
+  );
 }
 
 const styles = StyleSheet.create({
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: theme.colors.background,
-  },
-  loadingText: {
-    marginTop: 16,
-    fontSize: 14,
-    color: theme.colors.textSecondary,
-  },
-  container: {
-    padding: 16,
-    paddingBottom: 80,
-  },
-  headerCard: {
-    backgroundColor: theme.colors.primary,
-    borderRadius: 20,
-    padding: 24,
-    ...theme.shadows.card,
-    marginBottom: 16,
-    alignItems: 'center',
-  },
-  locationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  locationText: {
-    color: theme.colors.goldLight,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  currentStatus: {
-    fontSize: 36,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginTop: 16,
-  },
-  nextPrayerText: {
-    fontSize: 16,
-    color: theme.colors.goldLight,
-    marginTop: 4,
-  },
-  autoSilentCard: {
-    backgroundColor: theme.colors.cardBg,
-    borderRadius: 16,
-    padding: 16,
-    ...theme.shadows.card,
-    marginBottom: 20,
-  },
-  autoSilentRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  autoSilentTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: theme.colors.textPrimary,
-  },
-  autoSilentDesc: {
-    fontSize: 12,
-    color: theme.colors.textSecondary,
-    marginTop: 2,
-    maxWidth: 180,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: theme.colors.textPrimary,
-    marginBottom: 12,
-  },
+  hero: { backgroundColor: c.primary, borderRadius: 20, padding: 20, marginBottom: 14, alignItems: 'center', ...theme.shadows.activeCard },
+  locRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  loc: { color: c.goldLight, fontSize: 13, fontWeight: '600' },
+  date: { color: '#fff', fontSize: 15, marginTop: 6 },
+  hijri: { color: c.gold, fontSize: 14, marginTop: 2, fontWeight: '600' },
+  divider: { height: 1, alignSelf: 'stretch', backgroundColor: 'rgba(255,255,255,0.15)', marginVertical: 14 },
+  heroLabel: { color: c.goldLight, fontSize: 13 },
+  nextName: { color: '#fff', fontSize: 17, fontWeight: '700', marginTop: 6 },
+  countdown: { color: '#fff', fontSize: 40, fontWeight: '800', marginTop: 4, fontVariant: ['tabular-nums'] },
+  silentCard: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#F3EEFF' },
+  silentText: { flex: 1, color: c.textPrimary, fontSize: 14, fontWeight: '600' },
+  prayerRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 8, borderRadius: 10 },
+  prayerNext: { backgroundColor: '#E8F5E9' },
+  prayerName: { flex: 1, fontSize: 16, fontWeight: '600', color: c.textPrimary },
+  prayerTime: { fontSize: 16, fontWeight: '700', color: c.textPrimary },
+  minor: { fontSize: 13, color: c.textSecondary, fontWeight: '500' },
+  quickRow: { flexDirection: 'row', gap: 10, marginBottom: 14 },
+  quick: { flex: 1, backgroundColor: c.cardBg, borderRadius: 14, paddingVertical: 14, alignItems: 'center', gap: 6, ...theme.shadows.card },
+  quickText: { fontSize: 12, fontWeight: '600', color: c.textPrimary },
+  hadith: { fontSize: 15, lineHeight: 24, color: c.textPrimary },
+  hadithRef: { fontSize: 12, color: c.textSecondary, marginTop: 8, textAlign: 'right' },
 });
