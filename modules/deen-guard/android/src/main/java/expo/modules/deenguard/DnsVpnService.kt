@@ -10,8 +10,10 @@ import java.io.FileOutputStream
 import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.InetAddress
+import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.ExecutorService
-import java.util.concurrent.Executors
+import java.util.concurrent.ThreadPoolExecutor
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
 
 /**
@@ -89,7 +91,13 @@ class DnsVpnService : VpnService() {
 
     tun = fd
     isRunning = true
-    pool = Executors.newFixedThreadPool(4)
+    // Bounded queue: any app on the device can send UDP to the virtual DNS address, so an
+    // unbounded queue would let a flood exhaust memory and kill the filter. Excess is dropped.
+    pool = ThreadPoolExecutor(
+      8, 8, 30, TimeUnit.SECONDS,
+      ArrayBlockingQueue(256),
+      ThreadPoolExecutor.DiscardPolicy()
+    )
     reader = Thread({ readLoop(fd) }, "DeenGuardDns").also { it.start() }
   }
 
@@ -159,11 +167,20 @@ class DnsVpnService : VpnService() {
       try {
         DatagramSocket().use { socket ->
           protect(socket) // keep our own upstream traffic out of the tunnel
-          socket.soTimeout = 4_000
-          socket.send(DatagramPacket(query.dns, query.dns.size, server, 53))
+          // connect() makes the kernel drop datagrams from any other source address/port.
+          socket.connect(server, 53)
+          socket.soTimeout = 3_000
+          socket.send(DatagramPacket(query.dns, query.dns.size))
           val resp = ByteArray(4_096)
           val p = DatagramPacket(resp, resp.size)
-          socket.receive(p)
+          val deadline = System.currentTimeMillis() + 3_000
+          while (true) {
+            socket.receive(p)
+            // Only accept an answer whose transaction ID matches our query (anti-spoofing).
+            if (p.length >= 12 && resp[0] == query.dns[0] && resp[1] == query.dns[1]) break
+            if (System.currentTimeMillis() > deadline) throw java.net.SocketTimeoutException()
+            p.length = resp.size
+          }
           writePacket(output, DnsPacket.buildUdpResponse(query, resp.copyOf(p.length)))
         }
         return

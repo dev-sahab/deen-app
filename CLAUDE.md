@@ -19,6 +19,9 @@ npm run build:apk        # shareable test APK (build:prod → Play AAB)
 
 # Quick check that the whole JS bundle compiles
 npx expo export --platform android
+
+# Tests (Jest; Kotlin tests: ./gradlew :deen-guard:testDebugUnitTest)
+npm test
 ```
 
 No local JDK/Android SDK is assumed; Kotlin is compiled on EAS. See docs/STACK.md.

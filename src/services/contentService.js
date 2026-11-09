@@ -1,4 +1,5 @@
 import { File, Directory, Paths } from 'expo-file-system';
+import hadithBooks from '../data/hadithBooks.json';
 
 const QURAN = 'https://cdn.jsdelivr.net/gh/fawazahmed0/quran-api@1/editions';
 const HADITH = 'https://cdn.jsdelivr.net/gh/fawazahmed0/hadith-api@1/editions';
@@ -63,6 +64,10 @@ const quranUrls = (edition, chapter) => [
 
 /** Returns [{ verse, arabic, translation }] for a surah. */
 export const getSurah = async (chapter, { arabicEdition, lang, withTranslation = true }) => {
+  // Values can arrive from deep links: only allow known surah numbers and editions in URLs.
+  chapter = Number(chapter);
+  if (!Number.isInteger(chapter) || chapter < 1 || chapter > 114) throw new Error('Invalid surah');
+  if (!ARABIC_EDITIONS[arabicEdition]) arabicEdition = 'ara-quranindopak';
   const tr = QURAN_TRANSLATIONS[lang] || QURAN_TRANSLATIONS.en;
   const [ar, trans] = await Promise.all([
     getJson(`q-${arabicEdition}-${chapter}`, quranUrls(arabicEdition, chapter)),
@@ -77,6 +82,11 @@ export const getSurah = async (chapter, { arabicEdition, lang, withTranslation =
 
 /** Hadiths of one book section, in Bangla or English. */
 export const getHadithSection = async (book, section, lang) => {
+  // book/section come from route params (deep links). Allow only bundled book ids and their
+  // section numbers so a crafted link can't load arbitrary JSON under a trusted book title.
+  const info = hadithBooks.find((b) => b.id === book);
+  section = Number(section);
+  if (!info || !info.sections.some((s) => s.n === section)) throw new Error('Invalid hadith section');
   const edition = (lang === 'bn' ? 'ben-' : 'eng-') + book;
   const data = await getJson(`h-${edition}-${section}`, [
     `${HADITH}/${edition}/sections/${section}.min.json`,

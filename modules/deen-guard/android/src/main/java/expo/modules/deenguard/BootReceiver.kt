@@ -8,7 +8,18 @@ import android.util.Log
 
 /** Re-arms the silent alarm chain (and the content filter) after reboot / clock change / update. */
 class BootReceiver : BroadcastReceiver() {
+  private val allowed = setOf(
+    Intent.ACTION_BOOT_COMPLETED,
+    Intent.ACTION_MY_PACKAGE_REPLACED,
+    Intent.ACTION_TIME_CHANGED,
+    Intent.ACTION_TIMEZONE_CHANGED,
+    "android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED",
+  )
+
   override fun onReceive(context: Context, intent: Intent) {
+    // The receiver must be exported for system broadcasts; ignore explicit intents from
+    // other apps that carry any other action.
+    if (intent.action !in allowed) return
     val ctx = context.applicationContext
     SilentScheduler.reschedule(ctx)
 

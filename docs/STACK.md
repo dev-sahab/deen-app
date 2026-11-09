@@ -54,6 +54,22 @@ features, and would mean rewriting the existing app.
   demo video. Apps that aren't accessibility tools are reviewed strictly.
 - **SCHEDULE_EXACT_ALARM:** user-granted; justified by prayer-time silencing.
 
+## Security review (2026-11-10, focused, not a full audit)
+
+Fixed:
+| Severity | Issue | Fix |
+|---|---|---|
+| Medium | Any app on the device could flood UDP to the virtual DNS address; the unbounded thread-pool queue would grow until the filter process died, silently turning protection off. | Bounded `ThreadPoolExecutor` (8 threads, queue 256, drop excess) in `DnsVpnService`. |
+| Low | Upstream DNS replies were accepted from any source/port and without a transaction-ID check, making spoofed answers easier for a LAN attacker. | `socket.connect(server, 53)` + reply ID must match the query. |
+| Low | Deep links (`deenapp://hadith/<book>/<section>`) were put into CDN URLs unchecked; `../` could load arbitrary jsDelivr JSON and show it as hadith under a trusted book title. | `contentService` accepts only bundled book ids / section numbers and surah 1–114 (tests in `src/__tests__/contentService.test.js`). |
+| Hardening | Exported `BootReceiver` ran for any explicit intent. | Ignores actions other than the system broadcasts it subscribes to. |
+
+Reviewed, no issue: alarm `PendingIntent`s are explicit + `FLAG_IMMUTABLE`; `SilentReceiver`, VPN and accessibility services are not exported / permission-guarded; prefs are `MODE_PRIVATE`; DNS parser is bounds-checked; no secrets in the repo.
+
+Known limits (by design): the user can switch the filter off (no PIN lock yet); Android "Private DNS" in strict mode or another VPN app bypasses the filter; DNS to the upstream is plain UDP (same as the phone's default DNS).
+
+`npm audit`: 10 advisories (2 high), all in Expo **build tooling** (`@expo/cli`, `glob`, `minimatch`, `zod`), not shipped in the app. npm's suggested fix downgrades to Expo 53 — do not apply; update Expo patch releases instead.
+
 ## Building
 Native code cannot run in Expo Go. Use a development build:
 ```bash
@@ -63,4 +79,14 @@ npm start                # then open the app; JS reloads live
 npm run build:apk        # shareable test APK
 npm run build:prod       # Play Store AAB
 ```
-Local builds (`npm run android`) need JDK 17 + Android SDK.
+Local builds (`npm run android`) need JDK 17+ and the Android SDK (platform `android-37.0`,
+build-tools 37.0.0, NDK 27.1.12297006). On Windows:
+- build from a path **without spaces** and short (e.g. `C:\b\deen`), and
+- add `cmake.dir=<sdk>/cmake/4.1.2` to `android/local.properties` — CMake 3.22's ninja fails on
+  long paths (`ninja: error: mkdir(...)`). EAS (Linux) is not affected.
+
+## Tests
+```bash
+npm test                                   # Jest: prayer times, silent windows, Hijri, deep-link validation
+cd android && ./gradlew :deen-guard:testDebugUnitTest   # Kotlin: DNS packet parser + 20k-case fuzz
+```
